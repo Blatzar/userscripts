@@ -3,20 +3,22 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.7.1
+// @version     1.7.2
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
 // ==/UserScript==
 
 // edit these to enable/disable features.
-var skipButton = true;
-var downloadButton = true;
-var arrowFix = true;
-var blurEpisodes = true;
-var descriptionCut = true;
-var inputTags = true;
-var fixLoading = true;
+const skipButton = true;
+const downloadButton = true;
+const arrowFix = true;
+const blurEpisodes = true;
+const inputTags = true;
+const fixLoading = true;
+
+// descriptionCut fixed on website
+const descriptionCut = false;
 
 //https://gist.github.com/chrisjhoughton/7890303
 var waitForEl = function(selector, callback) {
@@ -31,7 +33,7 @@ var waitForEl = function(selector, callback) {
 
 if (arrowFix) {
     // Small fix to arrows in anime list. (https://fastani.net/animes)
-    var style = $(`<style> .animelist .anl-vid-tags-arrow-body { overflow: visible; }
+    const style = $(`<style> .animelist .anl-vid-tags-arrow-body { overflow: visible; }
                          .animelist .anl-vid-tags-arrow-body .anl-vid-tags-arrow.left { left: -20px; }
                          .animelist .anl-vid-tags-arrow-body .anl-vid-tags-arrow.right { right: -20px; }
                          .animelist .anl-vid-tags .anl-vid-tag-blank { display: none; }
@@ -39,11 +41,11 @@ if (arrowFix) {
     $('html > head').append(style);
     $(window).on('ready', function() {
         $("div.anl-vid-tag-blank").remove();
-    })
+    });
 
 }
 
-// Allows keyboard usage to scroll tags
+// Allows keyboard usage to scroll tags.
 if (inputTags) {
     document.addEventListener('keydown', function(event) {
         if (document.getElementsByTagName("input")[0] !== document.activeElement) {
@@ -61,10 +63,9 @@ if (inputTags) {
                     if (letter == key && !scrolled) {
                         $("div.anl-vid-tags")[0].scrollLeft = scroll;
                         scrolled = true;
-
                         //e.style.display = "";
                     } else {
-                        scroll = e.offsetLeft + e.offsetWidth
+                        scroll = e.offsetLeft + e.offsetWidth;
                         //e.style.display = "none";
                     }
                 });
@@ -88,7 +89,7 @@ if (descriptionCut) {
     waitForEl("div.card-box-hover-data-desc", function() {
         $.each($("div.card-box-hover-data-desc"), function(i, e) {
             var text = e.innerHTML.substring(0, 120);
-            text = (text.split(" ").slice(0, -1).join(' '))
+            text = (text.split(" ").slice(0, -1).join(' '));
             // removes ,...
             if (text.endsWith(",")) {
                 text = text.substring(0, text.length - 1);
@@ -108,19 +109,20 @@ if (descriptionCut) {
 
 if (blurEpisodes) {
     //Blurs episode thumbnails until hover.
-    var style = $('<style> a.aninfobox-content-body-selector-list-item > img { filter: blur(8px);transition: 0.3s; }</style>');
+    const style = $('<style> a.aninfobox-content-body-selector-list-item > img { filter: blur(8px);transition: 0.3s; }</style>');
     $('html > head').append(style);
 
     $(document).on("mouseover", "a.aninfobox-content-body-selector-list-item", function() {
-        $(this).find("img").css("filter", "blur(0px)")
+        $(this).find("img").css("filter", "blur(0px)");
     });
     $(document).on("mouseout", "a.aninfobox-content-body-selector-list-item", function() {
-        $(this).find("img").css("filter", "blur(8px)")
+        $(this).find("img").css("filter", "blur(8px)");
     });
 }
 
 // Fixes for video player.
 $(window).on('ready', function() {
+    // Forcefully removes the loading overlay.
     if (fixLoading) {
         waitForEl("div.plyr__controls__item", function() {
             console.log("Loading fix.");
@@ -140,22 +142,15 @@ $(window).on('ready', function() {
 
         //<a href="https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-576p.mp4" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a>
         if (downloadButton) {
-            var download = "<a href=\"" + url;
-            download += `
-      " download id="download_button" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a download>
-     `
+            var download = `<a href="${url}" download id="download_button" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a download>`;
             $(".plyr__controls__item.plyr__menu").append(download);
         }
 
         console.log(id);
         if (id != -1 && skipButton) {
-            var skip = "<a href=\"" + cutUrl + id;
-            skip += `
-      " class="plyr__control" data-plyr="seekTime"><svg role="presentation" focusable="false"><use xlink:href="#plyr-fast-forward"></use></svg><span class="plyr__sr-only">captions</span></a download>
-     `
+            var skip = `<a href="${cutUrl + id}" class="plyr__control" data-plyr="seekTime"><svg role="presentation" focusable="false"><use xlink:href="#plyr-fast-forward"></use></svg><span class="plyr__sr-only">captions</span></a download>`;
             $(".plyr__controls__item.plyr__menu").append(skip);
         }
-        console.log("success");
-        fixed = true;
+        console.log("Applied player controls.");
     }
 });

@@ -3,7 +3,7 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.8.1
+// @version     1.8.3
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
@@ -13,19 +13,12 @@
 const inputTags = true;
 const fixLoading = true;
 const skipButton = true;
-const airDate = true;
+const anilistCountdown = true;
 const downloadButton = true;
 
-// All of these are already added
-const arrowFix = false;
-const blurEpisodes = false;
-
-// descriptionCut fixed on website
-const descriptionCut = false;
-
 //https://gist.github.com/chrisjhoughton/7890303
-var waitForEl = function(selector, callback) {
-    if (jQuery(selector).length) {
+var waitForEl = (selector, callback) => {
+    if ($(selector).length) {
         callback();
     } else {
         setTimeout(function() {
@@ -35,14 +28,14 @@ var waitForEl = function(selector, callback) {
 };
 
 
-function rafAsync() {
+var rafAsync = () => {
     return new Promise(resolve => {
         requestAnimationFrame(resolve); //faster than set time out
     });
 }
 
 // Allows rerunning, unlike waitForEl atm
-function checkElement(selector, element) {
+var checkElement = (selector, element) => {
     if (document.querySelector(selector) === null || $(selector)[0] == element) {
         return rafAsync().then(() => checkElement(selector, element));
     } else {
@@ -50,26 +43,102 @@ function checkElement(selector, element) {
     }
 }
 
-function addAiring(selector, element) {
+function request(type, url, data, headers) {
+    return new Promise(resolve => {
+        resolve(
+            $.ajax({
+                type: type,
+                url: url,
+                success: function(data) {
+                    console.log(data);
+                },
+                headers: headers,
+                data: data,
+            })
+        );
+    });
+}
+
+
+//var data = request("GET", "https://fastani.net/api/data", "", {"a6e46773cb517a43f5f149f839": "Bearer JBKibPfG5DyirHbTHSy1zQu8cbFrGvtlSTR9b4d55sMWa9EI4KqkNwR+zio3bAifcJv4xyxHDepYxR/qw+W9/g=="});
+//console.log(`TEST: ${data}`)
+
+//$.when(request("POST", "https://graphql.anilist.co")).done(function(json) {console.log("TEST1");});
+
+var page = -1;
+var searchQuery = "";
+var tags = "";
+var years = "";
+var data = {};
+
+var addAiring = async (selector, element) => {
+    console.log(data, page, years, tags);
     console.log("addAiring");
+    //console.log(data["animeData"]["cards"])
     checkElement(selector, element)
-        .then((element) => {
+        .then(async (element) => {
             console.log("In menu");
+            // In homepage no page can be found.
+            newSearchQuery = $("input")[0].value;
+            newPage = $("div.anl-pagination-item.active")[0] ? $("div.anl-pagination-item.active")[0].textContent : null;
+            newTags = $("div.anl-vid-tag.active").toArray().map(tag => tag.innerText).join("%2C");
+            newYears = $("div.dropdown-box-list-item.active").toArray().map(tag => tag.innerText).join("%2C");
+            console.log(newSearchQuery, newPage, newTags, newYears);
+            if (page != newPage || searchQuery != newSearchQuery || years != newYears || tags != newTags) {
+                url = newPage != null ? `https://fastani.net/api/data?page=${newPage}&animes=1&search=${newSearchQuery}&tags=${newTags}&years=${newYears}` : "https://fastani.net/api/data";
+                data = await request("GET", url, "", {
+                    "a6e46773cb517a43f5f149f839": "Bearer JBKibPfG5DyirHbTHSy1zQu8cbFrGvtlSTR9b4d55sMWa9EI4KqkNwR+zio3bAifcJv4xyxHDepYxR/qw+W9/g=="
+                });
+                console.log(data);
+                page = newPage;
+                searchQuery = newSearchQuery;
+                tags = newTags;
+                years = newYears;
+            }
+            title = $("div.anicb-i-title")[0].textContent
+            //cards = (data["animeData"]["cards"])
+            for (const [key, value] of Object.entries(data)) {
+                if (typeof(value) === typeof({})) {
+                    cards = "cards" in value ? value["cards"] : value;
+                    cards.forEach((card) => {
+                        if (card["title"]["english"] === title) {
+                            show = card;
+                        }
+                    });
+                }
+            };
+
+            console.log(show);
+
+            var addCountdown = (id, text) => {
+                console.log(`Countdown: ${id} ${text}`);
+                countdown = $("#countdown")[0];
+                let element = `<div class="aninfobox-content-body-bar-item" id="countdown" onclick="window.open('https://anilist.co/anime/${id}');">${text}</div>`;
+                if (countdown) {
+                    countdown.innerText = text;
+                    countdown.onclick = () => {
+                        window.open(`https://anilist.co/anime/${id}`);
+                    }
+                } else {
+                    $("div.aninfobox-content-body-bar").prepend(element);
+                }
+            }
+
             /*
-            $.each($("div.dropdown-box-list-item"), function(i, e) {
-              console.log(e)
-              e.onclick = function(){addAiring('a.aninfobox-content-body-selector-list-item', null);};
-              e.innerHTML = "gg";
-            });
-            */
-            let url = $("a.aninfobox-content-body-selector-list-item > img")[0].src
-            console.log(url);
-            // Should probably be regex.
-            let id = url.split('thumbs/')[1].split('_')[0];
+                  $.each($("div.dropdown-box-list-item"), function(i, e) {
+                    console.log(e)
+                    e.onclick = function(){addAiring('a.aninfobox-content-body-selector-list-item', null);};
+                    e.innerHTML = "gg";
+                  });
+                  */
+
+            let id = show["anilistId"];
+            addCountdown(id, "Anilist");
+            console.log(id);
             const query = `
             query ($id: Int) {
               Media (id: $id, type: ANIME) {
-              relations {
+                relations {
                   edges {
                     id
                     relationType(version: 2)
@@ -105,87 +174,42 @@ function addAiring(selector, element) {
                 //.join(":")
                 return `${days}d ${hours}h ${minutes}m`
             }
-
-            function getAiring(data) {
-                console.log(`data`)
-                ajax = $.ajax({
-                    type: 'POST',
-                    url: 'https://graphql.anilist.co',
-                    data: data,
-                    dataType: 'json',
-                    success: function(data) {console.log(data);},
-                });
-                return ajax
-            }
-
-            function getLatest(id){
-              console.log(`getLatest ${id}`)
-              var data = {
-                  'query': query,
-                  'variables': {
-                      'id': id
-                  }
-              };
-              jQuery.when(
-                  getAiring(data)
-              ).done(function(json) {
-                  console.log(`airing done ${id}`)
-                  let nextAiringEpisode = json["data"]["Media"]["nextAiringEpisode"];
-                  console.log(nextAiringEpisode);
-                  if (nextAiringEpisode) {
-                      let remaining = nextAiringEpisode["timeUntilAiring"]
-                      let time = toHHMMSS(remaining);
-                      console.log(time);
-                      let element = `<div class="aninfobox-content-body-bar-item" onclick="window.open('https://anilist.co/anime/${id}');">${time}</div>`;
-                      $("div.aninfobox-content-body-bar").prepend(element);
-                      return addAiring(selector, $(selector)[0]);
-                  }
-                  else if (json["data"]["Media"]["format"] === "TV") {
+            var getLatest = async (id) => {
+                var data = {
+                    'query': query,
+                    'variables': {
+                        'id': id
+                    }
+                };
+                json = await request("POST", "https://graphql.anilist.co", data, {})
+                let nextAiringEpisode = json["data"]["Media"]["nextAiringEpisode"];
+                if (nextAiringEpisode) {
+                    let remaining = nextAiringEpisode["timeUntilAiring"]
+                    let time = toHHMMSS(remaining);
+                    addCountdown(id, time);
+                    return addAiring(selector, $(selector)[0]);
+                }
+                // If there's no airing date and a sequel exists. 
+                else if (json["data"]["Media"]["format"] === "TV") {
                     let edges = (json["data"]["Media"]["relations"]["edges"]);
                     for (i = 0; i < edges.length; i++) {
-                      console.log(`Run ${i}`);
-                      if (edges[i]["relationType"] === "SEQUEL" && edges[i]["node"]["format"] === "TV"){
-                        return getLatest(edges[i]["node"]["id"]);
-                      }
+                        if (edges[i]["relationType"] === "SEQUEL" && edges[i]["node"]["format"] === "TV") {
+                            return getLatest(edges[i]["node"]["id"]);
+                        }
                     }
+                    // This fuckery to ensure there's always one instane running.
                     return addAiring(selector, $(selector)[0]);
-                  }
-                  else {
+                } else {
                     return addAiring(selector, $(selector)[0]);
-                  }
-              });
+                }
             };
-          getLatest(id);
+            getLatest(id);
         });
 };
-if (airDate) {
-    addAiring('a.aninfobox-content-body-selector-list-item', null);
+if (anilistCountdown) {
+    addAiring('div.aninfobox-content-body', null);
 }
 
-/*
-function addAiring (){
-  waitForEl("a.aninfobox-content-body-selector-list-item", function() {
-  console.log("test");
-  console.log($("a.aninfobox-content-body-selector-list-item > img"));
-  });
-}
-*/
-
-//addAiring();
-
-if (arrowFix) {
-    // Small fix to arrows in anime list. (https://fastani.net/animes)
-    const style = $(`<style> .animelist .anl-vid-tags-arrow-body { overflow: visible; }
-                         .animelist .anl-vid-tags-arrow-body .anl-vid-tags-arrow.left { left: -20px; }
-                         .animelist .anl-vid-tags-arrow-body .anl-vid-tags-arrow.right { right: -20px; }
-                         .animelist .anl-vid-tags .anl-vid-tag-blank { display: none; }
-                </style>`);
-    $('html > head').append(style);
-    $(window).on('ready', function() {
-        $("div.anl-vid-tag-blank").remove();
-    });
-
-}
 
 // Allows keyboard usage to scroll tags.
 if (inputTags) {
@@ -226,47 +250,11 @@ if (inputTags) {
 }
 
 
-if (descriptionCut) {
-    // Sets max hover text for descriptions.
-    waitForEl("div.card-box-hover-data-desc", function() {
-        $.each($("div.card-box-hover-data-desc"), function(i, e) {
-            var text = e.innerHTML.substring(0, 120);
-            text = (text.split(" ").slice(0, -1).join(' '));
-            // removes ,...
-            if (text.endsWith(",")) {
-                text = text.substring(0, text.length - 1);
-            }
-            e.innerHTML = text + "...";
-        });
-        /*
-        //Rounds stars
-        $.each($('span[type="star"]'), function(i, e){
-          console.log(e.innerText)
-          e.innerText = (Math.round(e.innerText * 100) / 100)
-        });
-        */
-        console.log("Fixed text");
-    });
-}
-
-if (blurEpisodes) {
-    //Blurs episode thumbnails until hover.
-    const style = $('<style> a.aninfobox-content-body-selector-list-item > img { filter: blur(8px);transition: 0.3s; }</style>');
-    $('html > head').append(style);
-
-    $(document).on("mouseover", "a.aninfobox-content-body-selector-list-item", function() {
-        $(this).find("img").css("filter", "blur(0px)");
-    });
-    $(document).on("mouseout", "a.aninfobox-content-body-selector-list-item", function() {
-        $(this).find("img").css("filter", "blur(8px)");
-    });
-}
-
 // Fixes for video player.
 $(window).on('ready', function() {
     // Forcefully removes the loading overlay.
     if (fixLoading) {
-        waitForEl("div.plyr__controls__item", function() {
+        waitForEl("video", function() {
             console.log("Loading fix.");
             setTimeout(function() {
                 $("div.wath-page-loading").css("display", "none");

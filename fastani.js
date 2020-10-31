@@ -3,7 +3,7 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.8.3
+// @version     1.8.6
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
@@ -15,6 +15,8 @@ const fixLoading = true;
 const skipButton = true;
 const anilistCountdown = true;
 const downloadButton = true;
+const nextButton = true;
+const autoNext = true;
 
 //https://gist.github.com/chrisjhoughton/7890303
 var waitForEl = (selector, callback) => {
@@ -32,7 +34,7 @@ var rafAsync = () => {
     return new Promise(resolve => {
         requestAnimationFrame(resolve); //faster than set time out
     });
-}
+};
 
 // Allows rerunning, unlike waitForEl atm
 var checkElement = (selector, element) => {
@@ -41,7 +43,7 @@ var checkElement = (selector, element) => {
     } else {
         return Promise.resolve(true);
     }
-}
+};
 
 function request(type, url, data, headers) {
     return new Promise(resolve => {
@@ -70,6 +72,7 @@ var searchQuery = "";
 var tags = "";
 var years = "";
 var data = {};
+var accountElement = "";
 
 var addAiring = async (selector, element) => {
     console.log(data, page, years, tags);
@@ -83,30 +86,36 @@ var addAiring = async (selector, element) => {
             newPage = $("div.anl-pagination-item.active")[0] ? $("div.anl-pagination-item.active")[0].textContent : null;
             newTags = $("div.anl-vid-tag.active").toArray().map(tag => tag.innerText).join("%2C");
             newYears = $("div.dropdown-box-list-item.active").toArray().map(tag => tag.innerText).join("%2C");
+            newAccountElement = $("div.hd-b-button");
             console.log(newSearchQuery, newPage, newTags, newYears);
-            if (page != newPage || searchQuery != newSearchQuery || years != newYears || tags != newTags) {
+            if (page != newPage || searchQuery != newSearchQuery || years != newYears || tags != newTags || accountElement != newAccountElement) {
                 url = newPage != null ? `https://fastani.net/api/data?page=${newPage}&animes=1&search=${newSearchQuery}&tags=${newTags}&years=${newYears}` : "https://fastani.net/api/data";
                 data = await request("GET", url, "", {
                     "a6e46773cb517a43f5f149f839": "Bearer JBKibPfG5DyirHbTHSy1zQu8cbFrGvtlSTR9b4d55sMWa9EI4KqkNwR+zio3bAifcJv4xyxHDepYxR/qw+W9/g=="
                 });
+                if (newPage == null && !newAccountElement.length){
+                  list = await request("GET", "https://fastani.net/api/data/@me/list", "", "");
+                  data = data.list = list;
+                }
                 console.log(data);
                 page = newPage;
                 searchQuery = newSearchQuery;
                 tags = newTags;
                 years = newYears;
+                accountElement = newAccountElement;
             }
-            title = $("div.anicb-i-title")[0].textContent
-            //cards = (data["animeData"]["cards"])
+            show = null;
+            title = $("div.anicb-i-title")[0].textContent;
             for (const [key, value] of Object.entries(data)) {
                 if (typeof(value) === typeof({})) {
-                    cards = "cards" in value ? value["cards"] : value;
+                    cards = "cards" in value ? value.cards : value;
                     cards.forEach((card) => {
-                        if (card["title"]["english"] === title) {
+                        if (card.title.english === title) {
                             show = card;
                         }
                     });
                 }
-            };
+            }
 
             console.log(show);
 
@@ -118,11 +127,11 @@ var addAiring = async (selector, element) => {
                     countdown.innerText = text;
                     countdown.onclick = () => {
                         window.open(`https://anilist.co/anime/${id}`);
-                    }
+                    };
                 } else {
                     $("div.aninfobox-content-body-bar").prepend(element);
                 }
-            }
+            };
 
             /*
                   $.each($("div.dropdown-box-list-item"), function(i, e) {
@@ -132,7 +141,7 @@ var addAiring = async (selector, element) => {
                   });
                   */
 
-            let id = show["anilistId"];
+            let id = show.anilistId;
             addCountdown(id, "Anilist");
             console.log(id);
             const query = `
@@ -157,23 +166,28 @@ var addAiring = async (selector, element) => {
                   episode
                 }
                 format
+                trailer {
+                  id
+                  site
+                  thumbnail
+                }
               }
             }
             `;
 
             var toHHMMSS = (secs) => {
-                let sec_num = parseInt(secs, 10)
-                let days = Math.floor(sec_num / (3600 * 24))
-                let hours = Math.floor(sec_num / 3600) - days * 24
-                let minutes = Math.floor(sec_num / 60) % 60
-                let seconds = sec_num % 60
+                let sec_num = parseInt(secs, 10);
+                let days = Math.floor(sec_num / (3600 * 24));
+                let hours = Math.floor(sec_num / 3600) - days * 24;
+                let minutes = Math.floor(sec_num / 60) % 60;
+                let seconds = sec_num % 60;
 
                 let list = [days, hours, minutes, seconds]
                     .map(v => v < 10 ? "0" + v : v)
-                    .filter((v, i) => v !== "00" || i > 0)
+                    .filter((v, i) => v !== "00" || i > 0);
                 //.join(":")
-                return `${days}d ${hours}h ${minutes}m`
-            }
+                return `${days}d ${hours}h ${minutes}m`;
+            };
             var getLatest = async (id) => {
                 var data = {
                     'query': query,
@@ -181,20 +195,20 @@ var addAiring = async (selector, element) => {
                         'id': id
                     }
                 };
-                json = await request("POST", "https://graphql.anilist.co", data, {})
-                let nextAiringEpisode = json["data"]["Media"]["nextAiringEpisode"];
+                json = await request("POST", "https://graphql.anilist.co", data, {});
+                let nextAiringEpisode = json.data.Media.nextAiringEpisode;
                 if (nextAiringEpisode) {
-                    let remaining = nextAiringEpisode["timeUntilAiring"]
+                    let remaining = nextAiringEpisode.timeUntilAiring;
                     let time = toHHMMSS(remaining);
                     addCountdown(id, time);
                     return addAiring(selector, $(selector)[0]);
                 }
                 // If there's no airing date and a sequel exists. 
-                else if (json["data"]["Media"]["format"] === "TV") {
-                    let edges = (json["data"]["Media"]["relations"]["edges"]);
+                else if (json.data.Media.format === "TV") {
+                    let edges = (json.data.Media.relations.edges);
                     for (i = 0; i < edges.length; i++) {
-                        if (edges[i]["relationType"] === "SEQUEL" && edges[i]["node"]["format"] === "TV") {
-                            return getLatest(edges[i]["node"]["id"]);
+                        if (edges[i].relationType === "SEQUEL" && edges[i].node.format === "TV") {
+                            return getLatest(edges[i].node.id);
                         }
                     }
                     // This fuckery to ensure there's always one instane running.
@@ -206,6 +220,7 @@ var addAiring = async (selector, element) => {
             getLatest(id);
         });
 };
+
 if (anilistCountdown) {
     addAiring('div.aninfobox-content-body', null);
 }
@@ -262,7 +277,8 @@ $(window).on('ready', function() {
         });
     }
     // Checks if already added.
-    if (!document.getElementById("extra_button")) {
+    if (!document.getElementById("extra_controls")) {
+        $("video").append(`<div id="extra_controls" display="none" style="position: absolute; left: 0px; top: 0px; width: 0%; height: 0%; z-index: -2147483647; opacity: 0; pointer-events: none;"><div></div></div>`)
         var url = document.getElementsByClassName("plyr__video-wrapper")[0].firstChild.currentSrc;
         var id = document.getElementById("watch-page-main").attributes[4].textContent;
         var cutUrl = window.location.href.split("/");
@@ -272,14 +288,30 @@ $(window).on('ready', function() {
 
         //<a href="https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-576p.mp4" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a>
         if (downloadButton) {
-            var download = `<a href="${url}" download id="extra_button" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a download>`;
+            var download = `<a href="${url}" download id="download_button" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a download>`;
             $(".plyr__controls__item.plyr__menu").append(download);
         }
 
         console.log(id);
-        if (id != -1 && skipButton) {
-            var skip = `<a href="${cutUrl + id}" id="extra_button" class="plyr__control" data-plyr="seekTime"><svg role="presentation" focusable="false"><use xlink:href="#plyr-fast-forward"></use></svg><span class="plyr__sr-only">captions</span></a download>`;
+
+        if (skipButton){
+            var skip = `<a id="skip_button" onclick="document.getElementsByTagName('video')[0].currentTime += 85;" class="plyr__control" data-plyr="seekTime"><svg role="presentation" focusable="false"><use xlink:href="#plyr-fast-forward"></use></svg><span class="plyr__sr-only">Skip intro</span></a>`;
             $(".plyr__controls__item.plyr__menu").append(skip);
+        }
+        if (id != -1 && autoNext){
+          $("video")[0].onended = () => {
+              console.log("Next episode.");
+              window.location.href = cutUrl + id;
+          };
+        }
+        if (id != -1 && nextButton) {
+            var next = `<a href="${cutUrl + id}" class="plyr__control">
+                        <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="25pt" height="25pt" viewBox="0 0 25 25" version="1.1">
+                        <g>
+                        <path style=" stroke:none;fill-rule:nonzero;fill:rgb(100%,100%,100%);fill-opacity:1;" d="M 0 25 L 17.707031 12.5 L 0 0 Z M 20.832031 0 L 20.832031 25 L 25 25 L 25 0 Z M 20.832031 0 "></path>
+                        </g>
+                        </svg></a>`;
+            $(".plyr__controls__item.plyr__menu").append(next);
         }
         console.log("Applied player controls.");
         fixed = true;

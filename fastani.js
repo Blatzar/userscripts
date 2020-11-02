@@ -3,7 +3,7 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.8.6
+// @version     1.8.7
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
@@ -105,12 +105,20 @@ var addAiring = async (selector, element) => {
                 accountElement = newAccountElement;
             }
             show = null;
-            title = $("div.anicb-i-title")[0].textContent;
+            if ($("a.aninfobox-content-body-selector-list-item > img").length){
+              id = $("a.aninfobox-content-body-selector-list-item > img")[0].src.match(/thumbs\/(\d+)/)[1];
+              title = null;
+            }
+            else {
+              title = $("div.anicb-i-title")[0].textContent;
+              id = null;
+            }
+
             for (const [key, value] of Object.entries(data)) {
                 if (typeof(value) === typeof({})) {
                     cards = "cards" in value ? value.cards : value;
                     cards.forEach((card) => {
-                        if (card.title.english === title) {
+                        if (card.title.english === title || card.anilistId == id) {
                             show = card;
                         }
                     });
@@ -141,7 +149,7 @@ var addAiring = async (selector, element) => {
                   });
                   */
 
-            let id = show.anilistId;
+            id = show.anilistId;
             addCountdown(id, "Anilist");
             console.log(id);
             const query = `

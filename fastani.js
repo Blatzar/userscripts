@@ -3,20 +3,16 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.8.7
+// @version     1.9.0
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
 // ==/UserScript==
+const settingsButton = true;
 
-// edit these to enable/disable features.
-const inputTags = true;
-const fixLoading = true;
-const skipButton = true;
-const anilistCountdown = true;
-const downloadButton = true;
-const nextButton = true;
-const autoNext = true;
+// Global
+globalSettings = null;
+
 
 //https://gist.github.com/chrisjhoughton/7890303
 var waitForEl = (selector, callback) => {
@@ -29,7 +25,6 @@ var waitForEl = (selector, callback) => {
     }
 };
 
-
 var rafAsync = () => {
     return new Promise(resolve => {
         requestAnimationFrame(resolve); //faster than set time out
@@ -37,13 +32,174 @@ var rafAsync = () => {
 };
 
 // Allows rerunning, unlike waitForEl atm
-var checkElement = (selector, element) => {
-    if (document.querySelector(selector) === null || $(selector)[0] == element) {
-        return rafAsync().then(() => checkElement(selector, element));
+var checkElement = (selector, element, triggerOnRemoval = false) => {
+    var check = (triggerOnRemoval ? $(selector)[0] == element : document.querySelector(selector) === null || $(selector)[0] == element)
+    if (check) {
+        return rafAsync().then(() => checkElement(selector, element, triggerOnRemoval));
     } else {
+        console.log(selector[0], element)
         return Promise.resolve(true);
     }
 };
+
+var writeSettings = (settings) => {
+    localStorage.setItem("settings", JSON.stringify(settings))
+    globalSettings = settings;
+}
+
+var getSettings = () => {
+    const defaultSettings = {
+        'Download button': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Adds a download button to the player'
+        },
+        'Skip button': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Adds a skip OP button to the player. Skips 1 minute and 25 seconds'
+        },
+        'Next button': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Adds a next episode button to the player'
+        },
+        'Anilist countdown': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Adds an anilist button to all shows which will display a countdown to the next episode if there is one.'
+        },
+        'Auto next episode': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Automatically skips to the next episode when the current one is finished'
+        },
+        'Hide controls': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Hides the player controls when paused after 3 seconds, allows screenshotting easier.'
+        },
+        'Fix loading': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Fixes the player sometimes only playing sound'
+        },
+        'Input tags': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Allows keyboard input to scroll the tags used in Anime list'
+        },
+    }
+    var settings = JSON.parse(localStorage.getItem("settings"));
+    if (settings === null) {
+        writeSettings(defaultSettings);
+        settings = JSON.parse(localStorage.getItem("settings"));
+    }
+    // Allows for new settings without messing old ones.
+    for (var key in defaultSettings) {
+        if (!(key in settings)) {
+            settings[key] = defaultSettings[key];
+        }
+    }
+    return settings;
+}
+
+globalSettings = getSettings();
+console.log(globalSettings);
+
+var toggleKey = (key) => {
+    settings = getSettings();
+    setting = settings[key];
+    element = document.getElementById(key);
+    setting.enabled = !setting.enabled
+    writeSettings(settings);
+    if (setting.enabled) {
+        element.classList.add("toggleEnabled");
+        element.classList.remove("toggleDisabled");
+    } else {
+        element.classList.add("toggleDisabled");
+        element.classList.remove("toggleEnabled");
+    }
+}
+
+
+var showDesc = (key) => {
+    settings = getSettings();
+    setting = settings[key];
+    $("#descriptionText")[0].innerText = setting.description;
+    $("#descriptionText")[0].innerText += settings[key].enabled ? "\n\nEnabled" : "\n\nDisabled"
+}
+
+if (settingsButton) {
+    $('head').append('<style type="text/css">button.toggleEnabled{background:green !important;color:white !important}button.toggleDisabled{background:red !important;color:white !important}</style>');
+
+
+    var showSettings = () => {
+        element = `
+      <div class="auth-modal active">
+         <div class="amc-outside"></div>
+         <div class="auth-m-container">
+            <div class="auth-m-slider">
+               <div class="auth-m-slider-col active">
+                  <form class="auth-m-slider-col-body">
+                     <div class="auth-m-slider-col-b-title">Settings</div>`
+        settings = getSettings();
+        for (var key in settings) {
+            if (settings[key].showInSettings) {
+                button = (settings[key].enabled ? `<button id="${key}" class="amsclb-button toggleEnabled" type="button">${key}</button>` : `<button id="${key}" class="amsclb-button toggleDisabled" class="amsclb-button" type="button">${key}</button>`);
+                element += button;
+            }
+        }
+
+        element += `<button class="amsclb-button" onclick="localStorage.clear();location.reload();" type="button">Reset settings</button>
+                  </form>
+               </div>
+            </div>
+            <div class="auth-m-c-col"></div>
+            <div class="auth-m-c-col active">
+               <div class="auth-m-cc-title" id="descriptionTitle">Description</div>
+               <div class="auth-m-cc-desc" id="descriptionText"></div>
+            </div>
+         </div>
+      </div>
+      `
+        $("div.app").append(element);
+        $('div.amc-outside')[0].onclick = () => {
+            $("div.auth-modal.active").removeClass("active");
+            //delay() doesnt wanna work.
+            setTimeout(function() {
+                $("div.auth-modal").remove();
+            }, 300);
+        };
+        var cards = document.querySelectorAll("button.amsclb-button");
+        for (var i = 0; i < cards.length; i++) {
+            var card = cards[i];
+            if (card.innerText === "Reset settings") {
+                card.onmouseover = function() {
+                    $("#descriptionText")[0].innerText = "Resets all settings and reloads the tab";
+                }
+                continue;
+            }
+            card.onclick = function() {
+                toggleKey(this.attributes[0].ownerElement.innerText);
+            };
+            card.onmouseover = function() {
+                showDesc(this.attributes[0].ownerElement.innerText);
+            };
+        }
+    }
+    var addSettingsButton = (selector, element) => {
+        checkElement(selector, element)
+            .then(async (element) => {
+                $("div.hd-buttons.desktop-only").prepend(`<div class="hd-b-button" id="settings">Settings</div>`);
+                $("#settings")[0].onclick = () => {
+                    showSettings();
+                };
+                return addSettingsButton("div.hd-buttons.desktop-only", $("div.hd-buttons.desktop-only")[0]);
+            })
+    }
+    addSettingsButton("div.hd-buttons.desktop-only", "");
+}
 
 function request(type, url, data, headers) {
     return new Promise(resolve => {
@@ -93,9 +249,9 @@ var addAiring = async (selector, element) => {
                 data = await request("GET", url, "", {
                     "a6e46773cb517a43f5f149f839": "Bearer JBKibPfG5DyirHbTHSy1zQu8cbFrGvtlSTR9b4d55sMWa9EI4KqkNwR+zio3bAifcJv4xyxHDepYxR/qw+W9/g=="
                 });
-                if (newPage == null && !newAccountElement.length){
-                  list = await request("GET", "https://fastani.net/api/data/@me/list", "", "");
-                  data = data.list = list;
+                if (newPage == null && !newAccountElement.length) {
+                    list = await request("GET", "https://fastani.net/api/data/@me/list", "", "");
+                    data.list = list.savedAnimesList;
                 }
                 console.log(data);
                 page = newPage;
@@ -105,21 +261,22 @@ var addAiring = async (selector, element) => {
                 accountElement = newAccountElement;
             }
             show = null;
-            if ($("a.aninfobox-content-body-selector-list-item > img").length){
-              id = $("a.aninfobox-content-body-selector-list-item > img")[0].src.match(/thumbs\/(\d+)/)[1];
-              title = null;
-            }
-            else {
-              title = $("div.anicb-i-title")[0].textContent;
-              id = null;
+            if ($("a.aninfobox-content-body-selector-list-item > img").length) {
+                id = $("a.aninfobox-content-body-selector-list-item > img")[0].src.match(/thumbs\/(\d+)/)[1];
+                title = null;
+            } else {
+                title = $("div.anicb-i-title")[0].textContent;
+                id = null;
             }
 
             for (const [key, value] of Object.entries(data)) {
                 if (typeof(value) === typeof({})) {
                     cards = "cards" in value ? value.cards : value;
                     cards.forEach((card) => {
-                        if (card.title.english === title || card.anilistId == id) {
-                            show = card;
+                        if (card.title) {
+                            if (card.title.english === title && title !== null || card.anilistId == id && id !== null) {
+                                show = card;
+                            }
                         }
                     });
                 }
@@ -229,13 +386,13 @@ var addAiring = async (selector, element) => {
         });
 };
 
-if (anilistCountdown) {
+if (globalSettings["Anilist countdown"].enabled) {
     addAiring('div.aninfobox-content-body', null);
 }
 
 
 // Allows keyboard usage to scroll tags.
-if (inputTags) {
+if (globalSettings["Input tags"].enabled) {
     document.addEventListener('keydown', function(event) {
         if (document.getElementsByTagName("input")[0] !== document.activeElement) {
             var key = String.fromCharCode(event.keyCode);
@@ -273,10 +430,12 @@ if (inputTags) {
 }
 
 
+
+
 // Fixes for video player.
 $(window).on('ready', function() {
     // Forcefully removes the loading overlay.
-    if (fixLoading) {
+    if (globalSettings["Fix loading"].enabled) {
         waitForEl("video", function() {
             console.log("Loading fix.");
             setTimeout(function() {
@@ -287,6 +446,19 @@ $(window).on('ready', function() {
     // Checks if already added.
     if (!document.getElementById("extra_controls")) {
         $("video").append(`<div id="extra_controls" display="none" style="position: absolute; left: 0px; top: 0px; width: 0%; height: 0%; z-index: -2147483647; opacity: 0; pointer-events: none;"><div></div></div>`)
+        if (globalSettings["Hide controls"].enabled) {
+            timeout = "";
+            $("div.plyr.plyr--full-ui")[0].addEventListener("controlsshown", function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    if ($("button.plyr__controls__item.plyr__control[aria-label=Play]").length !== 0) {
+                        console.log("executed");
+                        $("div.plyr.plyr--full-ui").addClass("plyr--hide-controls");
+                    }
+                }, 3000);
+            });
+        }
+
         var url = document.getElementsByClassName("plyr__video-wrapper")[0].firstChild.currentSrc;
         var id = document.getElementById("watch-page-main").attributes[4].textContent;
         var cutUrl = window.location.href.split("/");
@@ -295,24 +467,24 @@ $(window).on('ready', function() {
         cutUrl = cutUrl.slice(0, -1).join('/') + "/";
 
         //<a href="https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-576p.mp4" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a>
-        if (downloadButton) {
+        if (globalSettings["Download button"].enabled) {
             var download = `<a href="${url}" download id="download_button" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a download>`;
             $(".plyr__controls__item.plyr__menu").append(download);
         }
 
         console.log(id);
 
-        if (skipButton){
+        if (globalSettings["Skip button"].enabled) {
             var skip = `<a id="skip_button" onclick="document.getElementsByTagName('video')[0].currentTime += 85;" class="plyr__control" data-plyr="seekTime"><svg role="presentation" focusable="false"><use xlink:href="#plyr-fast-forward"></use></svg><span class="plyr__sr-only">Skip intro</span></a>`;
             $(".plyr__controls__item.plyr__menu").append(skip);
         }
-        if (id != -1 && autoNext){
-          $("video")[0].onended = () => {
-              console.log("Next episode.");
-              window.location.href = cutUrl + id;
-          };
+        if (id != -1 && globalSettings["Auto next episode"].enabled) {
+            $("video")[0].onended = () => {
+                console.log("Next episode.");
+                window.location.href = cutUrl + id;
+            };
         }
-        if (id != -1 && nextButton) {
+        if (id != -1 && globalSettings["Next button"].enabled) {
             var next = `<a href="${cutUrl + id}" class="plyr__control">
                         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="25pt" height="25pt" viewBox="0 0 25 25" version="1.1">
                         <g>

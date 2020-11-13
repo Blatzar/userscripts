@@ -3,7 +3,7 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.9.0
+// @version     1.9.2
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
@@ -192,7 +192,11 @@ if (settingsButton) {
         checkElement(selector, element)
             .then(async (element) => {
                 $("div.hd-buttons.desktop-only").prepend(`<div class="hd-b-button" id="settings">Settings</div>`);
+                $("div.mobile-navigation > div.content").append(`<div class="sb-b-button" id="settingsMobile">Settings</div>`);
                 $("#settings")[0].onclick = () => {
+                    showSettings();
+                };
+                $("#settingsMobile")[0].onclick = () => {
                     showSettings();
                 };
                 return addSettingsButton("div.hd-buttons.desktop-only", $("div.hd-buttons.desktop-only")[0]);
@@ -286,15 +290,15 @@ var addAiring = async (selector, element) => {
 
             var addCountdown = (id, text) => {
                 console.log(`Countdown: ${id} ${text}`);
-                countdown = $("#countdown")[0];
-                let element = `<div class="aninfobox-content-body-bar-item" id="countdown" onclick="window.open('https://anilist.co/anime/${id}');">${text}</div>`;
+                countdown = $("#countdown > span")[0];
+                let element = `<div class="anicb-i-button" id="countdown" onclick="window.open('https://anilist.co/anime/${id}');"><span>${text}</span></div>`;
                 if (countdown) {
                     countdown.innerText = text;
                     countdown.onclick = () => {
                         window.open(`https://anilist.co/anime/${id}`);
                     };
                 } else {
-                    $("div.aninfobox-content-body-bar").prepend(element);
+                    $("div.anicb-i-buttons").append(element);
                 }
             };
 
@@ -417,7 +421,7 @@ if (globalSettings["Input tags"].enabled) {
                 });
             }
             // ESC
-            else if (event.keyCode == 27) {
+            else if (event.keyCode == 27 && $("div.anl-vid-tags").length !== 0) {
                 /*
                 $.each($("div.anl-vid-tag"), function(i, e) {
                   e.style.display = "";

@@ -3,7 +3,7 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.9.2
+// @version     1.10.0
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
@@ -33,19 +33,18 @@ var rafAsync = () => {
 
 // Allows rerunning, unlike waitForEl atm
 var checkElement = (selector, element, triggerOnRemoval = false) => {
-    var check = (triggerOnRemoval ? $(selector)[0] == element : document.querySelector(selector) === null || $(selector)[0] == element)
+    var check = (triggerOnRemoval ? $(selector)[0] == element : document.querySelector(selector) === null || $(selector)[0] == element);
     if (check) {
         return rafAsync().then(() => checkElement(selector, element, triggerOnRemoval));
     } else {
-        console.log(selector[0], element)
         return Promise.resolve(true);
     }
 };
 
 var writeSettings = (settings) => {
-    localStorage.setItem("settings", JSON.stringify(settings))
+    localStorage.setItem("settings", JSON.stringify(settings));
     globalSettings = settings;
-}
+};
 
 var getSettings = () => {
     const defaultSettings = {
@@ -89,7 +88,12 @@ var getSettings = () => {
             'showInSettings': true,
             'description': 'Allows keyboard input to scroll the tags used in Anime list'
         },
-    }
+        'Real episode number': {
+            'enabled': false,
+            'showInSettings': true,
+            'description': 'Shows the real episode number which doesn\'t reset on new seasons.'
+        },
+    };
     var settings = JSON.parse(localStorage.getItem("settings"));
     if (settings === null) {
         writeSettings(defaultSettings);
@@ -102,7 +106,7 @@ var getSettings = () => {
         }
     }
     return settings;
-}
+};
 
 globalSettings = getSettings();
 console.log(globalSettings);
@@ -111,7 +115,7 @@ var toggleKey = (key) => {
     settings = getSettings();
     setting = settings[key];
     element = document.getElementById(key);
-    setting.enabled = !setting.enabled
+    setting.enabled = !setting.enabled;
     writeSettings(settings);
     if (setting.enabled) {
         element.classList.add("toggleEnabled");
@@ -120,7 +124,7 @@ var toggleKey = (key) => {
         element.classList.add("toggleDisabled");
         element.classList.remove("toggleEnabled");
     }
-}
+};
 
 
 var showDesc = (key) => {
@@ -128,7 +132,7 @@ var showDesc = (key) => {
     setting = settings[key];
     $("#descriptionText")[0].innerText = setting.description;
     $("#descriptionText")[0].innerText += settings[key].enabled ? "\n\nEnabled" : "\n\nDisabled"
-}
+};
 
 if (settingsButton) {
     $('head').append('<style type="text/css">button.toggleEnabled{background:green !important;color:white !important}button.toggleDisabled{background:red !important;color:white !important}</style>');
@@ -139,10 +143,10 @@ if (settingsButton) {
       <div class="auth-modal active">
          <div class="amc-outside"></div>
          <div class="auth-m-container">
-            <div class="auth-m-slider">
+            <div class="auth-m-slider" style="height:120%;">
                <div class="auth-m-slider-col active">
                   <form class="auth-m-slider-col-body">
-                     <div class="auth-m-slider-col-b-title">Settings</div>`
+                     <div class="auth-m-slider-col-b-title">Settings</div>`;
         settings = getSettings();
         for (var key in settings) {
             if (settings[key].showInSettings) {
@@ -162,7 +166,7 @@ if (settingsButton) {
             </div>
          </div>
       </div>
-      `
+      `;
         $("div.app").append(element);
         $('div.amc-outside')[0].onclick = () => {
             $("div.auth-modal.active").removeClass("active");
@@ -177,9 +181,10 @@ if (settingsButton) {
             if (card.innerText === "Reset settings") {
                 card.onmouseover = function() {
                     $("#descriptionText")[0].innerText = "Resets all settings and reloads the tab";
-                }
+                };
                 continue;
             }
+            // Dont remove function in favor of () => {} as it won't work.
             card.onclick = function() {
                 toggleKey(this.attributes[0].ownerElement.innerText);
             };
@@ -187,7 +192,7 @@ if (settingsButton) {
                 showDesc(this.attributes[0].ownerElement.innerText);
             };
         }
-    }
+    };
     var addSettingsButton = (selector, element) => {
         checkElement(selector, element)
             .then(async (element) => {
@@ -200,12 +205,13 @@ if (settingsButton) {
                     showSettings();
                 };
                 return addSettingsButton("div.hd-buttons.desktop-only", $("div.hd-buttons.desktop-only")[0]);
-            })
-    }
+            });
+    };
     addSettingsButton("div.hd-buttons.desktop-only", "");
 }
 
-function request(type, url, data, headers) {
+function request(type, url, data, headers, json = false) {
+    contentType = json ? "application/json" : "application/x-www-form-urlencoded; charset=UTF-8";
     return new Promise(resolve => {
         resolve(
             $.ajax({
@@ -214,13 +220,13 @@ function request(type, url, data, headers) {
                 success: function(data) {
                     console.log(data);
                 },
+                contentType: contentType,
                 headers: headers,
                 data: data,
             })
         );
     });
 }
-
 
 //var data = request("GET", "https://fastani.net/api/data", "", {"a6e46773cb517a43f5f149f839": "Bearer JBKibPfG5DyirHbTHSy1zQu8cbFrGvtlSTR9b4d55sMWa9EI4KqkNwR+zio3bAifcJv4xyxHDepYxR/qw+W9/g=="});
 //console.log(`TEST: ${data}`)
@@ -233,21 +239,20 @@ var tags = "";
 var years = "";
 var data = {};
 var accountElement = "";
+var show = null;
 
 var addAiring = async (selector, element) => {
-    console.log(data, page, years, tags);
-    console.log("addAiring");
     //console.log(data["animeData"]["cards"])
     checkElement(selector, element)
         .then(async (element) => {
             console.log("In menu");
+            show = null;
             // In homepage no page can be found.
             newSearchQuery = $("input")[0].value;
             newPage = $("div.anl-pagination-item.active")[0] ? $("div.anl-pagination-item.active")[0].textContent : null;
             newTags = $("div.anl-vid-tag.active").toArray().map(tag => tag.innerText).join("%2C");
             newYears = $("div.dropdown-box-list-item.active").toArray().map(tag => tag.innerText).join("%2C");
             newAccountElement = $("div.hd-b-button");
-            console.log(newSearchQuery, newPage, newTags, newYears);
             if (page != newPage || searchQuery != newSearchQuery || years != newYears || tags != newTags || accountElement != newAccountElement) {
                 url = newPage != null ? `https://fastani.net/api/data?page=${newPage}&animes=1&search=${newSearchQuery}&tags=${newTags}&years=${newYears}` : "https://fastani.net/api/data";
                 data = await request("GET", url, "", {
@@ -257,14 +262,12 @@ var addAiring = async (selector, element) => {
                     list = await request("GET", "https://fastani.net/api/data/@me/list", "", "");
                     data.list = list.savedAnimesList;
                 }
-                console.log(data);
                 page = newPage;
                 searchQuery = newSearchQuery;
                 tags = newTags;
                 years = newYears;
                 accountElement = newAccountElement;
             }
-            show = null;
             if ($("a.aninfobox-content-body-selector-list-item > img").length) {
                 id = $("a.aninfobox-content-body-selector-list-item > img")[0].src.match(/thumbs\/(\d+)/)[1];
                 title = null;
@@ -302,17 +305,8 @@ var addAiring = async (selector, element) => {
                 }
             };
 
-            /*
-                  $.each($("div.dropdown-box-list-item"), function(i, e) {
-                    console.log(e)
-                    e.onclick = function(){addAiring('a.aninfobox-content-body-selector-list-item', null);};
-                    e.innerHTML = "gg";
-                  });
-                  */
-
             id = show.anilistId;
             addCountdown(id, "Anilist");
-            console.log(id);
             const query = `
             query ($id: Int) {
               Media (id: $id, type: ANIME) {
@@ -390,6 +384,57 @@ var addAiring = async (selector, element) => {
         });
 };
 
+
+var watched = (url) => {
+    match = url.match(/watch\/(.+)\/(\d+)\/(\d+)/);
+    id = match[1];
+    season = match[2];
+    episode = match[3];
+    request("POST", "https://fastani.net/api/data/anime/watched", JSON.stringify({
+        "anime": id,
+        "season": season,
+        "episode": episode
+    }), "", true);
+};
+
+var checkEpisodesMenu = (selector, element) => {
+    // This function allows users to click the small eye to mark the episode as watched.
+    // Does not work for users not logged in.
+    checkElement(selector, element)
+        .then(async () => {
+            episodes = $("a.aninfobox-content-body-selector-list-item");
+            if (globalSettings["Real episode number"].enabled && show != null) {
+                currentEpisodeNumber = 1;
+                seasonNumber = $("div.aninfobox-content-body-selector > div.dropdown-box > div.dropdown-box-input > span")[0].innerText.match(/\d+/)[0] - 1;
+                show.cdnData.seasons.forEach((season, index) => {
+                    if (index < seasonNumber) {
+                        currentEpisodeNumber += season.episodes.length;
+                    }
+                });
+                $("a.aninfobox-content-body-selector-list-item > div.eps-title").toArray().forEach((div, index) => {
+                    div.innerText = currentEpisodeNumber + " : " + show.cdnData.seasons[seasonNumber].episodes[index].title;
+                    currentEpisodeNumber++;
+                });
+            }
+
+            elements = $("a.aninfobox-content-body-selector-list-item > svg[data-icon=eye]").toArray();
+            elements.forEach((eye) => {
+                eye.addEventListener("click", (event) => {
+                    if ($("div.sb-b-button:contains('Login / Register')").length === 0) {
+                        watched(eye.parentElement.href);
+                        eye.classList.add("watched");
+                        event.preventDefault();
+                    } else {
+                        console.log("You need to be logged in to do that.");
+                    }
+                });
+            });
+            return checkEpisodesMenu(selector, $(selector)[0].href);
+        });
+};
+
+checkEpisodesMenu("a.aninfobox-content-body-selector-list-item", null);
+
 if (globalSettings["Anilist countdown"].enabled) {
     addAiring('div.aninfobox-content-body', null);
 }
@@ -400,10 +445,9 @@ if (globalSettings["Input tags"].enabled) {
     document.addEventListener('keydown', function(event) {
         if (document.getElementsByTagName("input")[0] !== document.activeElement) {
             var key = String.fromCharCode(event.keyCode);
-            console.log(key);
+            // console.log(key);
             // console.log(event.keyCode);
             //A - Z or 0-9
-            console.log(65 <= event.keyCode <= 70);
             if (65 <= event.keyCode && event.keyCode <= 90 || 48 <= event.keyCode && event.keyCode <= 57) {
                 var scroll = 0;
                 var scrolled = false;
@@ -434,10 +478,18 @@ if (globalSettings["Input tags"].enabled) {
 }
 
 
-
-
 // Fixes for video player.
 $(window).on('ready', function() {
+    queryString = window.location.search;
+    urlParams = new URLSearchParams(queryString);
+    fullscreen = urlParams.get('fullscreen');
+    if (fullscreen) {
+        plyr = $("div.plyr")[0];
+        plyr.requestFullscreen().catch((e) => {
+            console.log("Cannot fullscreen due to browser restrictions. If you're using Firefox disable full-screen-api.allow-trusted-requests-only in about:config");
+        });
+    }
+
     // Forcefully removes the loading overlay.
     if (globalSettings["Fix loading"].enabled) {
         waitForEl("video", function() {
@@ -456,7 +508,6 @@ $(window).on('ready', function() {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
                     if ($("button.plyr__controls__item.plyr__control[aria-label=Play]").length !== 0) {
-                        console.log("executed");
                         $("div.plyr.plyr--full-ui").addClass("plyr--hide-controls");
                     }
                 }, 3000);
@@ -476,8 +527,6 @@ $(window).on('ready', function() {
             $(".plyr__controls__item.plyr__menu").append(download);
         }
 
-        console.log(id);
-
         if (globalSettings["Skip button"].enabled) {
             var skip = `<a id="skip_button" onclick="document.getElementsByTagName('video')[0].currentTime += 85;" class="plyr__control" data-plyr="seekTime"><svg role="presentation" focusable="false"><use xlink:href="#plyr-fast-forward"></use></svg><span class="plyr__sr-only">Skip intro</span></a>`;
             $(".plyr__controls__item.plyr__menu").append(skip);
@@ -485,11 +534,11 @@ $(window).on('ready', function() {
         if (id != -1 && globalSettings["Auto next episode"].enabled) {
             $("video")[0].onended = () => {
                 console.log("Next episode.");
-                window.location.href = cutUrl + id;
+                window.location.href = cutUrl + id + "?fullscreen=true";
             };
         }
         if (id != -1 && globalSettings["Next button"].enabled) {
-            var next = `<a href="${cutUrl + id}" class="plyr__control">
+            var next = `<a href="${cutUrl + id}?fullscreen=true" class="plyr__control">
                         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="25pt" height="25pt" viewBox="0 0 25 25" version="1.1">
                         <g>
                         <path style=" stroke:none;fill-rule:nonzero;fill:rgb(100%,100%,100%);fill-opacity:1;" d="M 0 25 L 17.707031 12.5 L 0 0 Z M 20.832031 0 L 20.832031 25 L 25 25 L 25 0 Z M 20.832031 0 "></path>

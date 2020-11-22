@@ -3,12 +3,14 @@
 // @namespace   Violentmonkey Scripts
 // @match       https://fastani.net/*
 // @grant       none
-// @version     1.10.0
+// @version     1.10.5
 // @author      LagradOst
 // @description Fixes and features for fastani.
 // @require https://code.jquery.com/jquery-3.5.1.min.js
 // ==/UserScript==
 const settingsButton = true;
+
+var data = {};
 
 // Global
 globalSettings = null;
@@ -91,7 +93,17 @@ var getSettings = () => {
         'Real episode number': {
             'enabled': false,
             'showInSettings': true,
-            'description': 'Shows the real episode number which doesn\'t reset on new seasons.'
+            'description': 'Shows the real episode number which doesn\'t reset on new seasons'
+        },
+        'Hide adult shows': {
+            'enabled': false,
+            'showInSettings': true,
+            'description': 'Removes any shows tagged as adult'
+        },
+        'Show episode info in player': {
+            'enabled': true,
+            'showInSettings': true,
+            'description': 'Displays the current season and episode in the top left corner in the player'
         },
     };
     var settings = JSON.parse(localStorage.getItem("settings"));
@@ -110,6 +122,74 @@ var getSettings = () => {
 
 globalSettings = getSettings();
 console.log(globalSettings);
+
+
+// This should not throw any errors!
+var resolveRequest = async (promise, url) => {
+    console.log("catching request " + url);
+    resolved = await promise;
+    json = await resolved.json();
+    try {
+        console.log(json);
+
+        if (url.includes("@me/list")) {
+            data.list = json.savedAnimesList;
+        } else {
+            data = json;
+        }
+        // Changing the json in the intercepted request will change the site generation
+        // No need to manually remove them with CSS selectors
+        if (globalSettings["Hide adult shows"].enabled) {
+            for (var [key, value] of Object.entries(json)) {
+                if (typeof(value) === typeof({})) {
+                    if ("cards" in value) {
+                        try {
+                            value.cards = value.cards.filter(card => !card.isAdult);
+
+                        } 
+                        catch {
+                            console.log("Error in value-cards filter.");
+                        }
+                    }
+                    // Might not be values
+                    else if (value.length !== 0){                  
+                        if (typeof(value[0].isAdult) === "boolean") {
+                            try {
+                                value = value.filter(card => !card.isAdult);
+                            }
+                            catch {
+                                console.log("Error in value filter.");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch {
+        console.log("Error in ResolveRequest.");
+    }
+    resolved.json = () => {
+        resolved.json = function() {};
+        return json;
+    };
+    return resolved;
+};
+
+// MITM all network requests to get anime card data without extra requests.
+// Might cause minor memory leak
+fetch = (function() {
+    var cached_function = fetch;
+
+    return function() {
+        response = cached_function.apply(this, arguments);
+        // Should probably be regex
+        if (arguments[0].includes("/api/data") && arguments[0] !== "/api/data/@me" && !arguments[0].includes("/api/data/anime")) {
+            return resolveRequest(response, arguments[0]);
+        }
+        return response;
+    };
+}());
 
 var toggleKey = (key) => {
     settings = getSettings();
@@ -131,7 +211,7 @@ var showDesc = (key) => {
     settings = getSettings();
     setting = settings[key];
     $("#descriptionText")[0].innerText = setting.description;
-    $("#descriptionText")[0].innerText += settings[key].enabled ? "\n\nEnabled" : "\n\nDisabled"
+    $("#descriptionText")[0].innerText += settings[key].enabled ? "\n\nEnabled" : "\n\nDisabled";
 };
 
 if (settingsButton) {
@@ -143,7 +223,7 @@ if (settingsButton) {
       <div class="auth-modal active">
          <div class="amc-outside"></div>
          <div class="auth-m-container">
-            <div class="auth-m-slider" style="height:120%;">
+            <div class="auth-m-slider" style="height:140%;">
                <div class="auth-m-slider-col active">
                   <form class="auth-m-slider-col-body">
                      <div class="auth-m-slider-col-b-title">Settings</div>`;
@@ -228,46 +308,13 @@ function request(type, url, data, headers, json = false) {
     });
 }
 
-//var data = request("GET", "https://fastani.net/api/data", "", {"a6e46773cb517a43f5f149f839": "Bearer JBKibPfG5DyirHbTHSy1zQu8cbFrGvtlSTR9b4d55sMWa9EI4KqkNwR+zio3bAifcJv4xyxHDepYxR/qw+W9/g=="});
-//console.log(`TEST: ${data}`)
-
-//$.when(request("POST", "https://graphql.anilist.co")).done(function(json) {console.log("TEST1");});
-
-var page = -1;
-var searchQuery = "";
-var tags = "";
-var years = "";
-var data = {};
-var accountElement = "";
-var show = null;
-
 var addAiring = async (selector, element) => {
     //console.log(data["animeData"]["cards"])
     checkElement(selector, element)
         .then(async (element) => {
             console.log("In menu");
             show = null;
-            // In homepage no page can be found.
-            newSearchQuery = $("input")[0].value;
-            newPage = $("div.anl-pagination-item.active")[0] ? $("div.anl-pagination-item.active")[0].textContent : null;
-            newTags = $("div.anl-vid-tag.active").toArray().map(tag => tag.innerText).join("%2C");
-            newYears = $("div.dropdown-box-list-item.active").toArray().map(tag => tag.innerText).join("%2C");
-            newAccountElement = $("div.hd-b-button");
-            if (page != newPage || searchQuery != newSearchQuery || years != newYears || tags != newTags || accountElement != newAccountElement) {
-                url = newPage != null ? `https://fastani.net/api/data?page=${newPage}&animes=1&search=${newSearchQuery}&tags=${newTags}&years=${newYears}` : "https://fastani.net/api/data";
-                data = await request("GET", url, "", {
-                    "a6e46773cb517a43f5f149f839": "Bearer JBKibPfG5DyirHbTHSy1zQu8cbFrGvtlSTR9b4d55sMWa9EI4KqkNwR+zio3bAifcJv4xyxHDepYxR/qw+W9/g=="
-                });
-                if (newPage == null && !newAccountElement.length) {
-                    list = await request("GET", "https://fastani.net/api/data/@me/list", "", "");
-                    data.list = list.savedAnimesList;
-                }
-                page = newPage;
-                searchQuery = newSearchQuery;
-                tags = newTags;
-                years = newYears;
-                accountElement = newAccountElement;
-            }
+            console.log(data);
             if ($("a.aninfobox-content-body-selector-list-item > img").length) {
                 id = $("a.aninfobox-content-body-selector-list-item > img")[0].src.match(/thumbs\/(\d+)/)[1];
                 title = null;
@@ -279,6 +326,7 @@ var addAiring = async (selector, element) => {
             for (const [key, value] of Object.entries(data)) {
                 if (typeof(value) === typeof({})) {
                     cards = "cards" in value ? value.cards : value;
+                    console.log(cards);
                     cards.forEach((card) => {
                         if (card.title) {
                             if (card.title.english === title && title !== null || card.anilistId == id && id !== null) {
@@ -358,6 +406,7 @@ var addAiring = async (selector, element) => {
                         'id': id
                     }
                 };
+                // Tempting to store in show data but will cause Max call stack size
                 json = await request("POST", "https://graphql.anilist.co", data, {});
                 let nextAiringEpisode = json.data.Media.nextAiringEpisode;
                 if (nextAiringEpisode) {
@@ -436,14 +485,14 @@ var checkEpisodesMenu = (selector, element) => {
 checkEpisodesMenu("a.aninfobox-content-body-selector-list-item", null);
 
 if (globalSettings["Anilist countdown"].enabled) {
-    addAiring('div.aninfobox-content-body', null);
+    addAiring('div.anicb-i-title', null);
 }
 
 
 // Allows keyboard usage to scroll tags.
 if (globalSettings["Input tags"].enabled) {
     document.addEventListener('keydown', function(event) {
-        if (document.getElementsByTagName("input")[0] !== document.activeElement) {
+        if (document.getElementsByTagName("input")[0] !== document.activeElement && $("div.amc-outside").length === 0) {
             var key = String.fromCharCode(event.keyCode);
             // console.log(key);
             // console.log(event.keyCode);
@@ -501,7 +550,7 @@ $(window).on('ready', function() {
     }
     // Checks if already added.
     if (!document.getElementById("extra_controls")) {
-        $("video").append(`<div id="extra_controls" display="none" style="position: absolute; left: 0px; top: 0px; width: 0%; height: 0%; z-index: -2147483647; opacity: 0; pointer-events: none;"><div></div></div>`)
+        $("video").append(`<div id="extra_controls" display="none" style="position: absolute; left: 0px; top: 0px; width: 0%; height: 0%; z-index: -2147483647; opacity: 0; pointer-events: none;"><div></div></div>`);
         if (globalSettings["Hide controls"].enabled) {
             timeout = "";
             $("div.plyr.plyr--full-ui")[0].addEventListener("controlsshown", function() {
@@ -513,14 +562,28 @@ $(window).on('ready', function() {
                 }, 3000);
             });
         }
-
+        if (globalSettings['Show episode info in player'].enabled) {
+            $("div.watch-page-main").append(`<div id="episodeName" style="left: 20px;right: auto;" class="watch-page-icon"></div>`);
+            var episodeName = $("div#episodeName")[0];
+            episodeName.addEventListener("click", function(event) {event.preventDefault()});
+            var episodeData = $("div.watch-page-main")[0].dataset;
+            var urlRegex = /watch\/.*?\/(\d+)\/(\d+)/;
+            var matched = location.href.match(urlRegex);
+            var seasonNumber = matched[1];
+            var episodeNumber = matched[2];
+            episodeName.innerText = `${episodeData.fastaniTitle} - Season ${seasonNumber} Episode ${episodeNumber}`;
+        }
+      
+      
         var url = document.getElementsByClassName("plyr__video-wrapper")[0].firstChild.currentSrc;
         var id = document.getElementById("watch-page-main").attributes[4].textContent;
         var cutUrl = window.location.href.split("/");
+        var end = parseInt(cutUrl.slice(-1), 10);
+          
         // Below in case watch-page-main fails.
-        //var end = parseInt(cutUrl.slice(-1), 10);
         cutUrl = cutUrl.slice(0, -1).join('/') + "/";
-
+        
+        console.log(id);
         //<a href="https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-576p.mp4" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a>
         if (globalSettings["Download button"].enabled) {
             var download = `<a href="${url}" download id="download_button" target="_blank" class="plyr__control" data-plyr="download"><svg role="presentation" focusable="false"><use xlink:href="#plyr-download"></use></svg><span class="plyr__sr-only">Download</span></a download>`;
